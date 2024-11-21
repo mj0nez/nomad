@@ -17,6 +17,7 @@ import (
 type JobStartCommand struct {
 	Meta
 	versionSelected uint64
+	Eval            string
 }
 
 func (c *JobStartCommand) Help() string {
@@ -24,7 +25,7 @@ func (c *JobStartCommand) Help() string {
 Usage: nomad job start [options] <job>
 Alias: nomad start
 
-  Start an existing stopped job. This command is used to start a previously stopped job's
+  Start one or multiple stopped jobs. This command is used to start a previously stopped job's
   most recent version. Upon successful start, an interactive
   monitor session will start to display log lines as the job starts its
   allocations based on its most recent version. It is safe to exit the monitor
@@ -123,8 +124,16 @@ func (c *JobStartCommand) Run(args []string) int {
 		c.Ui.Error(fmt.Sprintf("Error initializing client: %s", err))
 		return 1
 	}
+	if consulToken == "" {
+		consulToken = os.Getenv("CONSUL_HTTP_TOKEN")
+	}
+
+	if vaultToken == "" {
+		vaultToken = os.Getenv("VAULT_TOKEN")
+	}
 
 	statusCh := make(chan int, len(jobIDs))
+	versionCh := make(chan uint64, len(args))
 	var wg sync.WaitGroup
 
 	for _, jobIDPrefix := range jobIDs {
@@ -152,42 +161,44 @@ func (c *JobStartCommand) Run(args []string) int {
 				return
 
 			}
-
-			// Get all versions associated to current job
-			q := &api.QueryOptions{Namespace: *job.Namespace}
-
-			versions, _, _, err := client.Jobs().Versions(*job.ID, true, q)
+			chosenVersion, err := c.GetSelectedVersion(client, job, *job.Namespace)
 			if err != nil {
-				c.Ui.Error(fmt.Sprintf("Error retrieving job versions: %s", err))
-				statusCh <- 1
-			}
-
-			// Find the most recent version for this job that has not been stopped
-			var chosenVersion uint64
-			versionAvailable := false
-			for i := range versions {
-				if !*versions[i].Stop {
-					chosenVersion = *versions[i].Version
-					versionAvailable = true
-					break
-				}
-
-			}
-			c.versionSelected = chosenVersion
-
-			if !versionAvailable {
-				c.Ui.Error(fmt.Sprintf("No previous available versions of job %v", *job.Name))
+				c.Ui.Error(err.Error())
 				statusCh <- 1
 				return
 			}
 
-			if consulToken == "" {
-				consulToken = os.Getenv("CONSUL_HTTP_TOKEN")
-			}
-
-			if vaultToken == "" {
-				vaultToken = os.Getenv("VAULT_TOKEN")
-			}
+			versionCh <- chosenVersion
+			// Get all versions associated to current job
+			//q := &api.QueryOptions{Namespace: *job.Namespace}
+			//
+			//versions, _, _, err := client.Jobs().Versions(*job.ID, true, q)
+			//if err != nil {
+			//	c.Ui.Error(fmt.Sprintf("Error retrieving job versions: %s", err))
+			//	statusCh <- 1
+			//}
+			//
+			//// Find the most recent version for this job that has not been stopped
+			//
+			////chosenVersion, versionAvailable := GetSelectedVersion(versions)
+			//var chosenVersion uint64
+			//versionAvailable := false
+			//for _, version := range versions {
+			//	c.Ui.Info(fmt.Sprintf("Version: %v has status %s", *version.Version, *version.Status))
+			//	if !*version.Stop && *version.Status == "running" {
+			//		chosenVersion = *version.Version
+			//		versionAvailable = true
+			//		break
+			//	}
+			//
+			//}
+			//c.versionSelected = chosenVersion
+			//
+			//if !versionAvailable {
+			//	c.Ui.Error(fmt.Sprintf("No previous available versions of job %v", *job.Name))
+			//	statusCh <- 1
+			//	return
+			//}
 
 			// Revert to most recent running version!
 			m := &api.WriteOptions{Namespace: *job.Namespace}
@@ -206,6 +217,7 @@ func (c *JobStartCommand) Run(args []string) int {
 				statusCh <- 0
 				return
 			}
+			c.Eval = resp.EvalID
 
 			if detach {
 				c.Ui.Output("Evaluation ID: " + resp.EvalID)
@@ -228,6 +240,7 @@ func (c *JobStartCommand) Run(args []string) int {
 	// the range statement below
 	// doesn't go on indefinitely
 	close(statusCh)
+	close(versionCh)
 
 	// return a non-zero exit code
 	// if even a single job start fails
@@ -237,4 +250,35 @@ func (c *JobStartCommand) Run(args []string) int {
 		}
 	}
 	return 0
+}
+func (c *JobStartCommand) GetSelectedVersion(client *api.Client, job *api.Job, namespace string) (uint64, error) {
+
+	// Get all versions associated to current job
+	q := &api.QueryOptions{Namespace: *job.Namespace}
+
+	versions, _, _, err := client.Jobs().Versions(*job.ID, true, q)
+	if err != nil {
+		c.Ui.Error(fmt.Sprintf("Error retrieving job versions: %s", err))
+		return 0, fmt.Errorf("error retrieving job versions: %s", err)
+	}
+
+	// Find the most recent version for this job that has not been stopped
+	var chosenVersion uint64
+	versionAvailable := false
+	for _, version := range versions {
+		c.Ui.Info(fmt.Sprintf("Version: %v has status %s", *version.Version, *version.Status))
+		if !*version.Stop && *version.Status == "running" {
+			chosenVersion = *version.Version
+			versionAvailable = true
+			break
+		}
+
+	}
+	if !versionAvailable {
+		c.Ui.Error(fmt.Sprintf("No previous available versions of job %v", *job.Name))
+		return 0, fmt.Errorf("No previous available versions of job %v", *job.Name)
+	}
+
+	return chosenVersion, nil
+
 }

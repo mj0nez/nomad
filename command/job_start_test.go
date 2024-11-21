@@ -5,9 +5,11 @@ package command
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/nomad/ci"
 	"github.com/hashicorp/nomad/command/agent"
@@ -15,6 +17,7 @@ import (
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/mock"
 	"github.com/hashicorp/nomad/nomad/structs"
+	"github.com/hashicorp/nomad/testutil"
 	"github.com/mitchellh/cli"
 	"github.com/posener/complete"
 	"github.com/shoenig/test/must"
@@ -127,6 +130,12 @@ func TestStartCommand_ManyJobs(t *testing.T) {
 
 	for _, jobID := range jobIDs {
 		job := testJob(jobID)
+		job.TaskGroups[0].Tasks[0].Resources.MemoryMB = pointer.Of(16)
+		job.TaskGroups[0].Tasks[0].Resources.DiskMB = pointer.Of(32)
+		job.TaskGroups[0].Tasks[0].Resources.CPU = pointer.Of(10)
+		job.TaskGroups[0].Tasks[0].Config = map[string]interface{}{
+			"run_for": "60s",
+		}
 
 		jobJSON, err := json.MarshalIndent(job, "", " ")
 		must.NoError(t, err)
@@ -184,10 +193,32 @@ func TestStartCommand_MultipleCycles(t *testing.T) {
 	})
 
 	defer srv.Shutdown()
+	testutil.WaitForResult(func() (bool, error) {
+		nodes, _, err := client.Nodes().List(nil)
+		if err != nil {
+			return false, err
+		}
+		if len(nodes) == 0 {
+			return false, fmt.Errorf("missing node")
+		}
+		if _, ok := nodes[0].Drivers["mock_driver"]; !ok {
+			return false, fmt.Errorf("mock_driver not ready")
+		}
+		return true, nil
+	}, func(err error) {
+		t.Fatalf("err: %s", err)
+	})
 
 	ui := cli.NewMockUi()
 
 	job1 := testJob("job-start-test")
+	job1.TaskGroups[0].Tasks[0].Resources.MemoryMB = pointer.Of(16)
+	job1.TaskGroups[0].Tasks[0].Resources.DiskMB = pointer.Of(32)
+	job1.TaskGroups[0].Tasks[0].Resources.CPU = pointer.Of(10)
+	job1.TaskGroups[0].Tasks[0].Config = map[string]interface{}{
+		"run_for": "400s",
+	}
+
 	resp, _, err := client.Jobs().Register(job1, nil)
 	if err != nil {
 		t.Fatalf("err: %s", err)
@@ -195,13 +226,20 @@ func TestStartCommand_MultipleCycles(t *testing.T) {
 	if code := waitForSuccess(ui, client, fullId, t, resp.EvalID); code != 0 {
 		t.Fatalf("status code non zero saw %d", code)
 	}
+	allocs, _, err := client.Jobs().Allocations("job-start-test", true, nil)
+	must.NoError(t, err)
+	for _, alloc := range allocs {
+		waitForAllocRunning(t, client, alloc.ID)
 
+	}
 	args := []string{"-address", addr, "-detach"}
 	args = append(args, "job-start-test")
 	expectedVersions := []uint64{0, 2, 4, 6, 8, 10}
 	stopCmd := &JobStopCommand{Meta: Meta{Ui: ui}}
 	startCmd := &JobStartCommand{Meta: Meta{Ui: ui}}
 
+	//waitForVersionRunning(t, client, *job1.ID, 0)
+	versionCh := make(chan uint64, len(expectedVersions))
 	// check multiple cycles of starting/stopping a job result in the correct version selected
 	for i := range 6 {
 
@@ -210,13 +248,21 @@ func TestStartCommand_MultipleCycles(t *testing.T) {
 			must.Sprintf("job stop stdout: %s", ui.OutputWriter.String()),
 			must.Sprintf("job stop stderr: %s", ui.ErrorWriter.String()),
 		)
+		time.Sleep(1 * time.Second)
 
 		code = startCmd.Run(args)
 		must.Zero(t, code,
 			must.Sprintf("job start stdout: %s", ui.OutputWriter.String()),
 			must.Sprintf("job start stderr: %s", ui.ErrorWriter.String()),
 		)
-		must.Eq(t, expectedVersions[i], startCmd.versionSelected)
+		if new_code := waitForSuccess(ui, client, fullId, t, resp.EvalID); new_code != 0 {
+			t.Fatalf("status code non zero saw %d", new_code)
+		}
+
+		time.Sleep(1 * time.Second)
+
+		versionSelected := <-versionCh
+		must.Eq(t, expectedVersions[i], versionSelected)
 	}
 
 }
