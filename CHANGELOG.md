@@ -1,3 +1,36 @@
+## 1000.0.0 (December 10, 2024)
+
+SECURITY:
+
+* security: Added more host environment variables to the default deny list for tasks [[GH-24540](https://github.com/hashicorp/nomad/issues/24540)]
+* security: Explicitly set 'Content-Type' header to mitigate XSS vulnerability [[GH-24489](https://github.com/hashicorp/nomad/issues/24489)]
+* security: add executeTemplate to default template function_denylist [[GH-24541](https://github.com/hashicorp/nomad/issues/24541)]
+
+IMPROVEMENTS:
+
+* api: Sanitise hcl variables before storage on JobSubmission [[GH-24423](https://github.com/hashicorp/nomad/issues/24423)]
+* cni: Add Nomad specific workload information to CNI_ARGS [[GH-24319](https://github.com/hashicorp/nomad/issues/24319)]
+* core: add the possibility to scale system jobs between 0 and 1 [[GH-24363](https://github.com/hashicorp/nomad/issues/24363)]
+* ui: Add an Edit From Version button as an option when reverting from an older job version [[GH-24168](https://github.com/hashicorp/nomad/issues/24168)]
+
+BUG FIXES:
+
+* agent: Fixed a bug where `retry_join` gave up after a single failure, rather than retrying until max attempts had been reached [[GH-24561](https://github.com/hashicorp/nomad/issues/24561)]
+* consul: Fixed a bug where failures when syncing Consul checks could panic the Nomad agent [[GH-24513](https://github.com/hashicorp/nomad/issues/24513)]
+* consul: Fixed a bug where non-root Nomad agents could not recreate a task's Consul token on task restart [[GH-24410](https://github.com/hashicorp/nomad/issues/24410)]
+* csi: Fixed a bug where drivers that emit multiple topology segments would cause placements to fail [[GH-24522](https://github.com/hashicorp/nomad/issues/24522)]
+* csi: Removed redundant namespace output from volume status command [[GH-24432](https://github.com/hashicorp/nomad/issues/24432)]
+* drivers: fix executor leak when drivers error starting tasks [[GH-24495](https://github.com/hashicorp/nomad/issues/24495)]
+* executor: validate executor on reattach to avoid possibility of killing non-Nomad processes [[GH-24538](https://github.com/hashicorp/nomad/issues/24538)]
+* keyring: Fixed a bug when decrypting aead with an empty RSA block on state upserts [[GH-24442](https://github.com/hashicorp/nomad/issues/24442)]
+* scheduler: Fix bug where forced garbage collection does not ignore GC thresholds [[GH-24456](https://github.com/hashicorp/nomad/issues/24456)]
+* scheduler: take all assigned cpu cores into account instead of only those part of the largest lifecycle [[GH-24304](https://github.com/hashicorp/nomad/issues/24304)]
+* ui: Fix a bug where namespaced jobs wouldn't show diffs on the versions page [[GH-24466](https://github.com/hashicorp/nomad/issues/24466)]
+* ui: Fix an issue where cmd+click or ctrl+click would double-open a var [[GH-24316](https://github.com/hashicorp/nomad/issues/24316)]
+* ui: Fix an issue where volumes weren't navigable [[GH-24542](https://github.com/hashicorp/nomad/issues/24542)]
+* vault: Fixed a bug where expired secret leases were treated as non-fatal and retried [[GH-24409](https://github.com/hashicorp/nomad/issues/24409)]
+* windows: Restore process accounting logic from Nomad 1.6.x [[GH-24494](https://github.com/hashicorp/nomad/issues/24494)]
+
 ## 1.9.3 (November 11, 2024)
 
 BUG FIXES:
