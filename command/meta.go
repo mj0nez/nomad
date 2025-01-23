@@ -253,7 +253,7 @@ func (m *Meta) SetupUi(args []string) {
 	}
 
 	// Check to see if the user has disabled hints via env var.
-	showCLIHints := os.Getenv(EnvNomadShowCLIHints)
+	showCLIHints := os.Getenv(EnvNomadCLIShowHints)
 	if showCLIHints == "false" {
 		m.showCLIHints = pointer.Of(false)
 	} else if showCLIHints == "true" {
@@ -612,7 +612,7 @@ func (m *Meta) uiHintsDisabled() bool {
 	}
 
 	agentConfig := agent.Config
-	agentUIConfig, ok := agentConfig["UI"].(map[string]interface{})
+	agentUIConfig, ok := agentConfig["UI"].(map[string]any)
 	if !ok {
 		return false
 	}
