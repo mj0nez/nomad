@@ -1267,21 +1267,6 @@ type ClusterMetadata struct {
 	CreateTime int64
 }
 
-// DeriveVaultTokenRequest is used to request wrapped Vault tokens for the
-// following tasks in the given allocation
-type DeriveVaultTokenRequest struct {
-	NodeID   string
-	SecretID string
-	AllocID  string
-	Tasks    []string
-	QueryOptions
-}
-
-// VaultAccessorsRequest is used to operate on a set of Vault accessors
-type VaultAccessorsRequest struct {
-	Accessors []*VaultAccessor
-}
-
 // VaultAccessor is a reference to a created Vault token on behalf of
 // an allocation's task.
 type VaultAccessor struct {
@@ -1293,18 +1278,6 @@ type VaultAccessor struct {
 
 	// Raft Indexes
 	CreateIndex uint64
-}
-
-// DeriveVaultTokenResponse returns the wrapped tokens for each requested task
-type DeriveVaultTokenResponse struct {
-	// Tasks is a mapping between the task name and the wrapped token
-	Tasks map[string]string
-
-	// Error stores any error that occurred. Errors are stored here so we can
-	// communicate whether it is retryable
-	Error *RecoverableError
-
-	QueryMeta
 }
 
 // GenericRequest is used to request where no

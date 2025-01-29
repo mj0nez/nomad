@@ -121,7 +121,7 @@ func fallbackVaultConfig(provider *structs.KEKProviderConfig, vaultcfg *config.V
 	}
 
 	setFallback("address", vaultcfg.Addr, "VAULT_ADDR")
-	setFallback("token", vaultcfg.Token, "VAULT_TOKEN")
+	//setFallback("token", vaultcfg.Token, "VAULT_TOKEN") Important?
 	setFallback("tls_ca_cert", vaultcfg.TLSCaPath, "VAULT_CACERT")
 	setFallback("tls_client_cert", vaultcfg.TLSCertFile, "VAULT_CLIENT_CERT")
 	setFallback("tls_client_key", vaultcfg.TLSKeyFile, "VAULT_CLIENT_KEY")

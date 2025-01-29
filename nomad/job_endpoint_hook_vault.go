@@ -4,8 +4,6 @@
 package nomad
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -30,16 +28,12 @@ func (h jobVaultHook) Validate(job *structs.Job) ([]error, error) {
 		return nil, nil
 	}
 
-	requiresToken := false
 	for _, tg := range vaultBlocks {
 		for _, vaultBlock := range tg {
 			vconf := h.srv.config.VaultConfigs[vaultBlock.Cluster]
 			if !vconf.IsEnabled() {
 				return nil, fmt.Errorf("Vault %q not enabled but used in the job",
 					vaultBlock.Cluster)
-			}
-			if vconf.DefaultIdentity == nil && !vconf.AllowsUnauthenticated() {
-				requiresToken = true
 			}
 		}
 	}
@@ -48,39 +42,8 @@ func (h jobVaultHook) Validate(job *structs.Job) ([]error, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Return early if Vault configuration doesn't require authentication.
-	if !requiresToken {
-		return nil, nil
-	}
-
-	// At this point the job has a vault block and the server requires
-	// authentication, so check if the user has the right permissions.
-	if job.VaultToken == "" {
-		return nil, fmt.Errorf("Vault used in the job but missing Vault token")
-	}
-
-	warnings := []error{
-		errors.New("Setting a Vault token when submitting a job is deprecated and will be removed in Nomad 1.9. Migrate your Vault configuration to use workload identity")}
-
-	tokenSecret, err := h.srv.vault.LookupToken(context.Background(), job.VaultToken)
-	if err != nil {
-		return warnings, fmt.Errorf("failed to lookup Vault token: %v", err)
-	}
-
-	// Check namespaces.
-	err = h.validateNamespaces(vaultBlocks, tokenSecret)
-	if err != nil {
-		return warnings, err
-	}
-
-	// Check policies.
-	err = h.validatePolicies(vaultBlocks, tokenSecret)
-	if err != nil {
-		return warnings, err
-	}
-
-	return warnings, nil
+	
+	return nil, nil
 }
 
 // validatePolicies returns an error if the job contains Vault blocks that

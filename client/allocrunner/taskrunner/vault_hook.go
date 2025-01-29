@@ -120,9 +120,6 @@ type vaultHook struct {
 	// widName is the workload identity name to use to retrieve signed JWTs.
 	widName string
 
-	// deriveTokenFunc is the function used to derive Vault tokens.
-	deriveTokenFunc deriveTokenFunc
-
 	// allowTokenExpiration determines if a renew loop should be run
 	allowTokenExpiration bool
 
@@ -146,18 +143,10 @@ func newVaultHook(config *vaultHookConfig) *vaultHook {
 		cancel:               cancel,
 		future:               newTokenFuture(),
 		widmgr:               config.widmgr,
+		widName:              config.task.Vault.IdentityName(),
 		allowTokenExpiration: config.vaultBlock.AllowTokenExpiration,
 	}
 	h.logger = config.logger.Named(h.Name())
-
-	h.widName = config.task.Vault.IdentityName()
-	wid := config.task.GetIdentity(h.widName)
-	switch {
-	case wid != nil:
-		h.deriveTokenFunc = h.deriveVaultTokenJWT
-	default:
-		h.deriveTokenFunc = h.deriveVaultTokenLegacy
-	}
 
 	return h
 }
@@ -376,7 +365,7 @@ func (h *vaultHook) deriveVaultToken() (string, bool) {
 	var attempts uint64
 	var backoff time.Duration
 	for {
-		token, err := h.deriveTokenFunc()
+		token, err := h.deriveVaultTokenJWT()
 		if err == nil {
 			return token, false
 		}
@@ -462,19 +451,6 @@ func (h *vaultHook) deriveVaultTokenJWT() (string, error) {
 	}
 
 	return token, nil
-}
-
-// deriveVaultTokenLegacy returns a Vault ACL token using the legacy flow where
-// Nomad clients request Vault tokens from Nomad servers.
-//
-// Deprecated: This authentication flow will be removed Nomad 1.9.
-func (h *vaultHook) deriveVaultTokenLegacy() (string, error) {
-	tokens, err := h.client.DeriveToken(h.alloc, []string{h.task.Name})
-	if err != nil {
-		return "", err
-	}
-
-	return tokens[h.task.Name], nil
 }
 
 // writeToken writes the given token to disk
